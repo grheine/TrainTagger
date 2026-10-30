@@ -1,0 +1,29 @@
+# Event dataset definition for topo/data/make_events.py.
+# Changing anything here changes the dataset; metadata.json records the values used.
+
+tree: outnano/Jets
+eos_dir: /eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_jettuples_240926_170X_v0.1_full/
+
+samples:
+  hh4b: GluGluHHTo4B_PU200.root
+  minbias: MinBias_PU200.root
+
+# Jets passed to the model: the n_jets leading jets (by jet_pt) in acceptance
+n_jets: 4
+n_parts: 16
+jet_pt_min: 15.0
+jet_eta_max: 2.4
+
+# HT as tagger/plot/bbbb.py:182 (HT_CUT, ETA_CUT in tagger/plot/common.py)
+ht_jet_pt_min: 30.0
+ht_jet_eta_max: 2.4
+
+# Split bucket = crc32("<sample>:<event>:<seed>") % 100, per sample.
+# Each split owns the buckets [lo, hi).
+splits:
+  minbias: {train: [0, 50], rate: [50, 100]}
+  hh4b: {train: [0, 60], val: [60, 80], test: [80, 100]}  # default, Greta to confirm
+
+# Constituent features: particle_input_vars.json of a saved model folder (--model-dir),
+# otherwise basic_input_config of this tagger config.
+default_model_config: tagger/model/configs/baseline.yaml
