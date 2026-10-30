@@ -1,6 +1,14 @@
 include:
   - local: "CI/template.yml"
 
+# No jet pipeline on the topo_e2e branch (topological trigger work in topo/).
+# Remove this block when topo_e2e is merged or the work moves out.
+workflow:
+  rules:
+    - if: $CI_COMMIT_BRANCH == "topo_e2e"
+      when: never
+    - when: always
+
 # Any of these variables can be defined in the pipeline, for ease of
 # reading only often changed variables are kept here. All variables are
 # defined with their default shared across all other pipeline values in ml_pipeline.yml
