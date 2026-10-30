@@ -6,6 +6,48 @@ All commands ran on NGT pod `session-small` (128 cores, pod memory cap 48 GB), e
 
 ## Commits
 
+On `topo_e2e`, local only, nothing pushed:
+
+1. `d791b6b` feat(topo): skeleton for the topological trigger package
+2. `e5247f1` ci: skip the jet pipeline on topo_e2e. A `workflow:` rule in `.gitlab-ci.yml`
+   that creates no pipeline when `$CI_COMMIT_BRANCH == "topo_e2e"`, and the default otherwise.
+   Own commit so it can be dropped. **Chris should confirm** this is how he wants it done
+   and that the GitLab mirror picks it up [unverified, not run on GitLab].
+3. `2f8eca6` feat(topo): event dataset maker and input inspection
+4. the checks, preselection measurement and this file (see `git log`)
+
+No change inside `tagger/` was needed, so there is no side branch off `main`.
+
+The worktree's upstream is unset (`git branch --unset-upstream`), so a bare `git push`
+does nothing until you set one.
+
+### What is in `topo/`
+
+| File | What it does |
+| :-- | :-- |
+| `configs/events.yaml` | cuts, split buckets, sample paths, feature source |
+| `data/inspect_inputs.py` | step 2 facts for one ntuple |
+| `data/make_events.py` | event dataset maker (step 3) |
+| `data/check_events.py` | step 4 checks on an output folder |
+| `data/measure_preselection.py` | step 5 table |
+
+`make_events.py` follows the guide, with four choices worth knowing about:
+- Whole events: an event belongs to a row range when its first row lies inside the range,
+  and the read extends past the end of the range to complete the last event. Consecutive
+  ranges therefore split the events with none dropped, instead of dropping the trailing
+  partial event.
+- `--fraction F` means the first F of the jet rows, not a random F of the events. The file
+  order is by job block, so 2 % of HH means events 40 000 to 41 000 or so, all from one job
+  file. That is fine for a smoke test, not for physics numbers.
+- Feature order: `particle_input_vars.json` of a saved model folder when `--model-dir` is
+  given (the same file `JetTagModel.load` reads, `tagger/model/JetTagModel.py:167`), otherwise
+  `basic_input_config` from `tagger/model/configs/baseline.yaml`. Using the json avoids
+  loading TensorFlow just to get a list. The 2 % run used the yaml. Its order is identical to
+  `output/baseline/particle_input_vars.json` in your other checkout.
+- The event key is `(sample, event_key)`, where `event_key` is the ntuple `event`.
+  Split = `crc32("<sample>:<event>:<seed>") % 100`, seed 0. MinBias 0-49 train,
+  50-99 rate; HH 0-59 train, 60-79 val, 80-99 test (**HH percentages are a default, your call**).
+
 ## Step 2: what the input files contain
 
 Folder `/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_jettuples_240926_170X_v0.1_full/`.
@@ -61,6 +103,86 @@ run on NGT `session-small` (HH 2.5 s, MinBias 6.4 s, 0.6 GB).
 
 ## Step 4: 2 % run and checks
 
+Output: `/shared/work/tutorials/topo_events/v0_2pct/{hh4b,minbias}/` (parquet + `metadata.json`).
+Command, NGT `session-small`, after `source setup.sh`:
+
+    python topo/data/make_events.py --sample hh4b    --fraction 0.02 --outdir /shared/work/tutorials/topo_events/v0_2pct
+    python topo/data/make_events.py --sample minbias --fraction 0.02 --outdir /shared/work/tutorials/topo_events/v0_2pct
+
+| | HH | MinBias |
+| :-- | --: | --: |
+| Jet rows read | 8 975 | 239 410 |
+| Events | 1 004 (train 597, val 211, test 196) | 38 238 (train 19 213, rate 19 025) |
+| Wall time | 0.95 s | 5.1 s |
+| Peak memory | 0.24 GB | 3.7 GB |
+| Output size | 0.5 MB | 4.0 MB |
+
+Full HH (50 000 events, 448 385 rows) as a cross-check: 8.6 s, 6.5 GB peak, in
+`/shared/work/tutorials/topo_events/v0_hh_full/`. Full MinBias would be about 24 chunks of
+500 000 rows at about 6.5 GB each, so roughly 5 min and under the 48 GB pod cap
+[estimate, not run].
+
+Checks: `python topo/data/check_events.py <folder> [--require-jets]`.
+
+1. Event count = unique keys in the rows read: **pass** for both (HH 1004 = 1004,
+   MinBias 38 238 = 38 238, same set of keys).
+2. Hand extraction for 3 random events (plain loops over the raw tree): **pass** for both.
+   Leading-jet pT, HT and the first jet's 16 x 20 constituent block match exactly.
+   HH events 40514, 40475, 40760; MinBias events 1197293, 1194179, 1230147 (`--require-jets`,
+   since the first draw hit 2 events without any jet in acceptance, which passed trivially).
+3. `const` for one jet equals `extract_nn_inputs(tree, ...)` on the raw tree for that jet row:
+   **pass** (HH event 40145 row 1291; MinBias event 1237034 row 197153).
+4. Split fractions within 1 % of target: **MinBias pass** (train 0.5025, rate 0.4975,
+   binomial sigma 0.0026). **HH fails the literal criterion**: train 0.5946, val 0.2102,
+   test 0.1952 on 1004 events, where the binomial sigma is 0.013 to 0.016. That is
+   statistics, not the rule. Over all 50 000 HH keys: train 0.6012, val 0.1979, test 0.2009;
+   over all 1 909 429 MinBias keys: 0.5000 / 0.5000.
+
+Also checked: event 40124 (the HH event with out-of-order rows) comes out sorted,
+jet pT 3152.75, 2406.75, 69.25, 47.5.
+
 ## Step 5: preselection
 
+`python topo/data/measure_preselection.py <hh4b folder> <minbias folder>`, NGT `session-small`.
+Cut c = largest HT with HT >= c keeping at least 99 % of HH train events that have
+n_jets_acc >= 4. Rate = MinBias rate-half pass fraction x 31 039 kHz. The denominator is the
+MinBias events present in the file (see the zero-jet section). Errors are binomial.
+
+On the 2 % outputs (450 HH train events with at least 4 jets, so the 1 % tail is about 5 events):
+
+| Cut | HH all (1004) | HH test (196) | MinBias rate (19 025) | Rate [kHz] |
+| :-- | --: | --: | --: | --: |
+| HT >= 62.50 | 0.9721 | 0.9745 | 0.0363 +- 0.0014 | 1127 +- 42 |
+| HT > 0 | 0.9920 | 0.9898 | 0.1275 +- 0.0024 | 3958 +- 75 |
+
+Same with full HH (22 644 train events with at least 4 jets) and the 2 % MinBias rate half.
+This is the more trustworthy cut value:
+
+| Cut | HH all (50 000) | HH test (10 044) | MinBias rate (19 025) | Rate [kHz] |
+| :-- | --: | --: | --: | --: |
+| HT >= 79.25 | 0.9593 | 0.9543 | 0.0238 +- 0.0011 | 739 +- 34 |
+| HT > 0 | 0.9895 | 0.9881 | 0.1275 +- 0.0024 | 3958 +- 75 |
+
+HT > 0 means at least one jet with pT > 30 in acceptance. Both cuts sit far above the
+14 kHz target (50 to 280 times), so either one only removes the easy MinBias. Your pick.
+
 ## Questions
+
+Ranked by how much they block next week.
+
+1. **MinBias event count (Chris).** No event-count source exists. 90 560 missing event
+   numbers come in blocks of multiples of 160, which looks like missing jobs. Only 11 are
+   isolated. If that reading is right, the rate denominator is "events present" and the
+   zero-jet bias is at most 6e-6. Need: is 160 events the job or lumi unit, and were jobs lost?
+   HH has all 50 000 numbers, so its denominator looks fine.
+2. **HH split percentages (Greta).** 60/20/20 is a default. With 50 000 HH events the test
+   split is about 10 000 events. Changing it means rerunning make_events, which takes seconds.
+3. **Preselection cut (Greta).** HT >= 79.25 (from full HH) or HT > 0. The 2 % value
+   (62.50) is too noisy to use.
+4. **CI rule (Chris).** Confirm the `workflow:` rule, or drop commit `e5247f1`.
+5. **`--fraction` is the first rows, not a random subset.** Fine for Monday's full run.
+   If a random subset of events is ever needed, add a selection by hash bucket.
+6. **16-jet cap.** No event has more than 16 jet rows in either sample. If the producer caps
+   jets, HT misses jets beyond the 16th [unverified].
+7. **Which pT.** Used `jet_pt` like `bbbb.py`, not `jet_pt_corr`. If Stella's model uses
+   corrected pT, the jet_kin inputs differ between the two approaches.
