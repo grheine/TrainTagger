@@ -81,6 +81,9 @@ run on NGT `session-small` (HH 2.5 s, MinBias 6.4 s, 0.6 GB).
   `make_events.py` sorts by `jet_pt` inside each event anyway.
 - Kinematics: `jet_pt` (= `jet_pt_phys`; `jet_pt_corr` is a different, larger value),
   `jet_eta_phys`, `jet_phi_phys`. `jet_eta` and `jet_phi` are hardware integers.
+- `make_data()` also cuts on `jet_reject == 0` (`tagger/data/tools.py:506`); `make_events.py`
+  and `bbbb.py` do not. `jet_reject` is False for every row in the first 500 000 rows of
+  both files, so the cut changes nothing here.
 - Every event has at most 16 jet rows in both samples, which looks like a producer cap
   [unverified]. HT is summed over these rows only.
 - Per-job files sit in `<sample>/FP/fp_jettuples_v170Xv0.1_full/jetTuple_extended_5_*.root`
@@ -122,16 +125,25 @@ Full HH (50 000 events, 448 385 rows) as a cross-check: 8.6 s, 6.5 GB peak, in
 500 000 rows at about 6.5 GB each, so roughly 5 min and under the 48 GB pod cap
 [estimate, not run].
 
-Checks: `python topo/data/check_events.py <folder> [--require-jets]`.
+Checks: `python topo/data/check_events.py <folder>`. The reference events are rebuilt with
+the jet tagger's own tools: `extract_nn_inputs` for the constituents, `group_id_values`
+(`tagger/data/tools.py:315`, as `bbbb.py` uses it) to group by event and sort by `jet_pt`,
+and the HT sum of `bbbb.py:182`. `group_id_values` groups by sorting on `event`, so it does
+not share the contiguous-rows logic of `make_events.py`. Its descending pT sort keeps file
+order for equal pT, the same as `make_events.py`. Run times: HH 2 % 3.4 s, MinBias 2 % 5.4 s
+(3.7 GB), full HH 7.2 s (6.8 GB).
 
 1. Event count = unique keys in the rows read: **pass** for both (HH 1004 = 1004,
    MinBias 38 238 = 38 238, same set of keys).
-2. Hand extraction for 3 random events (plain loops over the raw tree): **pass** for both.
-   Leading-jet pT, HT and the first jet's 16 x 20 constituent block match exactly.
-   HH events 40514, 40475, 40760; MinBias events 1197293, 1194179, 1230147 (`--require-jets`,
-   since the first draw hit 2 events without any jet in acceptance, which passed trivially).
-3. `const` for one jet equals `extract_nn_inputs(tree, ...)` on the raw tree for that jet row:
-   **pass** (HH event 40145 row 1291; MinBias event 1237034 row 197153).
+2. Every event against the reference: jet count, jet pT/eta/phi, the 16 x 20 constituent
+   block of every jet, zero-filled empty slots, HT, n_jets_acc, gen_mhh. **Pass**, exact
+   equality, on HH 2 % (1004 events, 3669 jets), MinBias 2 % (38 238 events, 28 347 jets)
+   and full HH (50 000 events, 183 134 jets). A copy of the HH output with one constituent
+   value and one HT value changed fails on `const` and `HT`, so the check can fail.
+3. One leading jet extracted with plain loops from the raw vectors, since check 2 shares
+   `extract_nn_inputs` with the maker; and `const` against `extract_nn_inputs` called on
+   the tree itself, without the row-range adapter. **Pass** (HH event 40477 row 4250,
+   MinBias event 1088822 row 86709, full HH event 23667 row 23698).
 4. Split fractions within 1 % of target: **MinBias pass** (train 0.5025, rate 0.4975,
    binomial sigma 0.0026). **HH fails the literal criterion**: train 0.5946, val 0.2102,
    test 0.1952 on 1004 events, where the binomial sigma is 0.013 to 0.016. That is
