@@ -3,7 +3,7 @@
 Prints: trees, event uniqueness, contiguity of rows per event, jets per event,
 pT ordering inside events, and the gen/MET branches present.
 
-    python topo/data/inspect_inputs.py <file.root> [--tree outnano/Jets]
+    python topo/data/checks/inspect_inputs.py <file.root> [--tree outnano/Jets]
 """
 import argparse
 

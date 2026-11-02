@@ -26,10 +26,10 @@ does nothing until you set one.
 | File | What it does |
 | :-- | :-- |
 | `configs/events.yaml` | cuts, split buckets, sample paths, feature source |
-| `data/inspect_inputs.py` | step 2 facts for one ntuple |
+| `data/checks/inspect_inputs.py` | step 2 facts for one ntuple |
 | `data/make_events.py` | event dataset maker (step 3) |
-| `data/check_events.py` | step 4 checks on an output folder |
-| `data/measure_preselection.py` | step 5 table |
+| `data/checks/check_events.py` | step 4 checks on an output folder |
+| `data/checks/measure_preselection.py` | step 5 table |
 
 `make_events.py` follows the guide, with four choices worth knowing about:
 - Whole events: an event belongs to a row range when its first row lies inside the range,
@@ -51,7 +51,7 @@ does nothing until you set one.
 ## Step 2: what the input files contain
 
 Folder `/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_jettuples_240926_170X_v0.1_full/`.
-Numbers from `python topo/data/inspect_inputs.py <file>`, including the gap analysis below,
+Numbers from `python topo/data/checks/inspect_inputs.py <file>`, including the gap analysis below,
 run on NGT `session-small` (HH 2.5 s, MinBias 6.4 s, 0.6 GB).
 
 | | GluGluHHTo4B_PU200.root | MinBias_PU200.root |
@@ -125,7 +125,7 @@ Full HH (50 000 events, 448 385 rows) as a cross-check: 8.6 s, 6.5 GB peak, in
 500 000 rows at about 6.5 GB each, so roughly 5 min and under the 48 GB pod cap
 [estimate, not run].
 
-Checks: `python topo/data/check_events.py <folder>`. The reference events are rebuilt with
+Checks: `python topo/data/checks/check_events.py <folder>`. The reference events are rebuilt with
 the jet tagger's own tools: `extract_nn_inputs` for the constituents, `group_id_values`
 (`tagger/data/tools.py:315`, as `bbbb.py` uses it) to group by event and sort by `jet_pt`,
 and the HT sum of `bbbb.py:182`. `group_id_values` groups by sorting on `event`, so it does
@@ -155,7 +155,7 @@ jet pT 3152.75, 2406.75, 69.25, 47.5.
 
 ## Step 5: preselection
 
-`python topo/data/measure_preselection.py <hh4b folder> <minbias folder>`, NGT `session-small`.
+`python topo/data/checks/measure_preselection.py <hh4b folder> <minbias folder>`, NGT `session-small`.
 Cut c = largest HT with HT >= c keeping at least 99 % of HH train events that have
 n_jets_acc >= 4. Rate = MinBias rate-half pass fraction x 31 039 kHz. The denominator is the
 MinBias events present in the file (see the zero-jet section). Errors are binomial.

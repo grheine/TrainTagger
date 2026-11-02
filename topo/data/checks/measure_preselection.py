@@ -4,7 +4,7 @@ The cut c is the largest HT value with HT >= c keeping at least KEEP of the HH t
 events that have n_jets_acc >= 4. For that cut and for HT > 0 it prints the fraction of
 all HH events kept, the fraction of MinBias rate events kept, and the rate in kHz.
 
-    python topo/data/measure_preselection.py <hh4b folder> <minbias folder> [--keep 0.99]
+    python topo/data/checks/measure_preselection.py <hh4b folder> <minbias folder> [--keep 0.99]
 """
 import argparse
 import glob

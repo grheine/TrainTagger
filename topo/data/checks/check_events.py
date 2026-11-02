@@ -1,6 +1,6 @@
 """Checks on a make_events.py output folder (BUILD-GUIDE step 4).
 
-    python topo/data/check_events.py <outdir>/<sample> [--rng-seed 1]
+    python topo/data/checks/check_events.py <outdir>/<sample> [--rng-seed 1]
 
 The reference events are rebuilt with the jet tagger's own tools (tagger/data/tools.py):
 extract_nn_inputs for the constituents, group_id_values to group by event and sort by
