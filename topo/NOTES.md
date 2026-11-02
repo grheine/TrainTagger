@@ -51,7 +51,7 @@ does nothing until you set one.
 ## Step 2: what the input files contain
 
 Folder `/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_jettuples_240926_170X_v0.1_full/`.
-Numbers from `python topo/data/inspect_inputs.py <file>` plus the ad-hoc gap analysis below,
+Numbers from `python topo/data/inspect_inputs.py <file>`, including the gap analysis below,
 run on NGT `session-small` (HH 2.5 s, MinBias 6.4 s, 0.6 GB).
 
 | | GluGluHHTo4B_PU200.root | MinBias_PU200.root |

@@ -16,6 +16,29 @@ def runs_of(values):
     return np.flatnonzero(np.r_[True, values[1:] != values[:-1]])
 
 
+def gap_analysis(unique_events):
+    """Event numbers absent between the lowest and highest present one.
+
+    A jet-row tree has no rows for events without jets, so those numbers are absent.
+    Missing jobs or lumi blocks also leave numbers absent, but in long runs.
+    """
+    lo, hi = int(unique_events[0]), int(unique_events[-1])
+    present = np.zeros(hi - lo + 1, bool)
+    present[unique_events - lo] = True
+    missing = np.flatnonzero(~present) + lo
+    print(f'absent event numbers in {lo}-{hi}: {len(missing)}')
+    if len(missing) == 0:
+        return
+    starts = np.flatnonzero(np.r_[True, np.diff(missing) != 1])
+    lengths = np.diff(np.r_[starts, len(missing)])
+    values, counts = np.unique(lengths, return_counts=True)
+    print('runs of absent numbers:', len(starts), ' length: count', dict(zip(values.tolist(), counts.tolist())))
+    blocks = lengths[lengths > 1]
+    print(f'isolated absent numbers (zero-jet candidates): {int((lengths == 1).sum())}; '
+          f'in runs longer than 1: {int(blocks.sum())} in {len(blocks)} runs',
+          f'(all lengths multiples of {np.gcd.reduce(blocks)})' if len(blocks) else '')
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('path')
@@ -59,6 +82,8 @@ def main():
     mhh = arrays['genHH_mass']
     varies = same_block & np.r_[False, mhh[1:] != mhh[:-1]]
     print('genHH_mass varies inside a block:', int(varies.sum()), ' first values:', mhh[starts[:5]])
+
+    gap_analysis(unique_events)
 
     eta = np.abs(arrays['jet_eta_phys'])
     acc = (pt > 15) & (eta < 2.4)
