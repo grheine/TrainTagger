@@ -178,6 +178,41 @@ This is the more trustworthy cut value:
 HT > 0 means at least one jet with pT > 30 in acceptance. Both cuts sit far above the
 14 kHz target (50 to 280 times), so either one only removes the easy MinBias. Your pick.
 
+## All200.root: what it contains, and leakage into the evaluation
+
+Checked 2026-11-02 on NGT `session-small` (row match: 82 s, 12 GB).
+
+- The README (section 1-2) says only how it is made: per-sample FastPUPPI ntuples
+  (`runPerformanceNTuple.py` / `jetNTuplizer.cc`), "shuffled and concatenated (`hadd`)".
+  Its example path is an older production (`fp_ntuples_v131Xv9/...`). No sample list.
+- `All200.root` in the CI folder has 61 484 563 jet rows, exactly the sum of all 41
+  per-sample files in that folder: QCD pT bins, DY, TT (inclusive, 2L2Nu, semileptonic),
+  ttH, ggH, VBF H, WH, ZH, HH->4b, HH->bbtautau, X->HH, Z'->tautau, W+jets, and MinBias.
+- Row match on (event, jet_pt, jet_eta, jet_phi; the last two in hardware units):
+  100 % of GluGluHHTo4B (448 385), MinBias (11 970 428) and TT (2 845 304) rows are in
+  `All200.root`.
+- Rows are not grouped by event (first 1 M rows: 112 636 event numbers in 140 481 runs) and
+  there is no sample branch, so events cannot be rebuilt from it.
+- `make_data.py` keeps unmatched jets with label `pileup` (`_split_flavor` in
+  `tagger/data/tools.py`), so MinBias jets enter its output either with a flavour label or as
+  `pileup`. Whether the baseline training drops `pileup` (`pileup: False` in
+  `baseline.yaml`) [unverified].
+- `All200_part0-5.root` sum to 49 549 749 rows: 35 614 more than `All200.root` without
+  MinBias (49 514 135), so not a plain split of it. Content unknown.
+
+Consequence: the jets of the evaluation events (HH `test`, MinBias `rate`) are in
+`All200.root`.
+1. Jet stream (lambda > 0): `make_data.py` output from `All200.root` trains on them.
+2. The CI baseline tagger was trained on `All200.root`, so the starting point of the
+   end-to-end model, Stella's frozen tagger and the HT x sum(b) reference have all seen these
+   jets with labels. Shared by all approaches, so the comparison stays fair, but absolute
+   efficiencies are optimistic. Size of the effect not measured (jets, not event decisions,
+   so probably small [unverified]).
+
+Options: (a) accept and document; (b) drop rows of HH test/val and MinBias rate events from
+the jet stream, using the row match above; (c) retrain the baseline tagger without them.
+Proposal: (a) for Padova, (b) if cheap once the training loop exists, (c) for Chris.
+
 ## Questions
 
 Ranked by how much they block next week.
@@ -187,14 +222,18 @@ Ranked by how much they block next week.
    isolated. If that reading is right, the rate denominator is "events present" and the
    zero-jet bias is at most 6e-6. Need: is 160 events the job or lumi unit, and were jobs lost?
    HH has all 50 000 numbers, so its denominator looks fine.
-2. **HH split percentages (Greta).** 60/20/20 is a default. With 50 000 HH events the test
+2. **All200.root leakage (Greta, then Chris).** All HH->4b and MinBias jet rows are inside
+   `All200.root`, so the jet stream and the CI baseline tagger have seen the jets of the
+   evaluation events (section above). Decide (a), (b) or (c) before the first training run.
+   Also ask Chris what `All200_part0-5.root` contain.
+3. **HH split percentages (Greta).** 60/20/20 is a default. With 50 000 HH events the test
    split is about 10 000 events. Changing it means rerunning make_events, which takes seconds.
-3. **Preselection cut (Greta).** HT >= 79.25 (from full HH) or HT > 0. The 2 % value
+4. **Preselection cut (Greta).** HT >= 79.25 (from full HH) or HT > 0. The 2 % value
    (62.50) is too noisy to use.
-4. **CI rule (Chris).** Confirm the `workflow:` rule, or drop commit `e5247f1`.
-5. **`--fraction` is the first rows, not a random subset.** Fine for Monday's full run.
+5. **CI rule (Chris).** Confirm the `workflow:` rule, or drop commit `e5247f1`.
+6. **`--fraction` is the first rows, not a random subset.** Fine for Monday's full run.
    If a random subset of events is ever needed, add a selection by hash bucket.
-6. **16-jet cap.** No event has more than 16 jet rows in either sample. If the producer caps
+7. **16-jet cap.** No event has more than 16 jet rows in either sample. If the producer caps
    jets, HT misses jets beyond the 16th [unverified].
-7. **Which pT.** Used `jet_pt` like `bbbb.py`, not `jet_pt_corr`. If Stella's model uses
+8. **Which pT.** Used `jet_pt` like `bbbb.py`, not `jet_pt_corr`. If Stella's model uses
    corrected pT, the jet_kin inputs differ between the two approaches.
